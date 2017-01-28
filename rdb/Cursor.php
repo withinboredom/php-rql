@@ -43,6 +43,7 @@ class Cursor implements Iterator
 
 		while (!$this->isComplete || ($this->currentIndex < $this->currentSize)) {
 			$requestor->next();
+			$requestor->current();
 			yield false;
 		}
 
@@ -148,7 +149,8 @@ class Cursor implements Iterator
 
 			while($responseQ->valid()) {
 				if (!$response) yield;
-				$response = $responseQ->next();
+				$responseQ->next();
+				$response = $responseQ->current();
 			}
 
 			$this->setBatch($response);

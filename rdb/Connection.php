@@ -293,7 +293,8 @@ class Connection extends DatumConverter
 
 		while($responseQ->valid()) {
 			if (!$response) yield;
-			$response = $responseQ->next();
+			$responseQ->next();
+			$response = $responseQ->current();
 		}
 
 	    if ($response['t'] != ResponseResponseType::PB_SUCCESS_PARTIAL) {
@@ -368,7 +369,8 @@ class Connection extends DatumConverter
 
 	    while($header->valid()) {
 		    if (!$responseHeader) yield;
-	    	$responseHeader = $header->next();
+	    	$header->next();
+	    	$responseHeader = $header->current();
 	    }
 
 	    $responseHeader = unpack("Vtoken/Vtoken2/Vsize", $responseHeader);
@@ -383,7 +385,8 @@ class Connection extends DatumConverter
 
 	    while($responseQ->valid()) {
 	    	if (!$responseBuf) yield;
-	    	$responseBuf = $responseQ->next();
+	    	$responseQ->next();
+	    	$responseBuf = $responseQ->current();
 	    }
 
 	    $response = json_decode($responseBuf);
