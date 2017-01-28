@@ -10,144 +10,176 @@ use r\DatumConverter;
 class Cursor implements Iterator
 {
 
-    private $token;
-    private $connection;
-    private $notes;
-    private $toNativeOptions;
-    private $currentData;
-    private $currentSize;
-    private $currentIndex;
-    private $isComplete;
-    private $wasIterated;
+	private $token;
+	private $connection;
+	private $notes;
+	private $toNativeOptions;
+	private $currentData;
+	private $currentSize;
+	private $currentIndex;
+	private $isComplete;
+	private $wasIterated;
 
-    public function __construct(
-        Connection $connection,
-        $initialResponse,
-        $token,
-        $notes,
-        $toNativeOptions
-    ) {
-        $this->connection = $connection;
-        $this->token = $token;
-        $this->notes = $notes;
-        $this->toNativeOptions = $toNativeOptions;
-        $this->wasIterated = false;
+	public function __construct(
+		Connection $connection,
+		$initialResponse,
+		$token,
+		$notes,
+		$toNativeOptions
+	) {
+		$this->connection = $connection;
+		$this->token = $token;
+		$this->notes = $notes;
+		$this->toNativeOptions = $toNativeOptions;
+		$this->wasIterated = false;
 
-        $this->setBatch($initialResponse);
-    }
+		$this->setBatch($initialResponse);
+	}
 
-    // PHP iterator interface
-    public function rewind()
-    {
-        if ($this->wasIterated) {
-            throw new RqlDriverError("Rewind() not supported. You can only iterate over a cursor once.");
-        }
-    }
-    public function next()
-    {
-        $this->requestMoreIfNecessary();
-        if (!$this->valid()) {
-            throw new RqlDriverError("No more data available.");
-        }
-        $this->wasIterated = true;
-        $this->currentIndex++;
-    }
-    public function valid()
-    {
-        $this->requestMoreIfNecessary();
-        return !$this->isComplete || ($this->currentIndex < $this->currentSize);
-    }
-    public function key()
-    {
-        return null;
-    }
-    public function current()
-    {
-        $this->requestMoreIfNecessary();
-        if (!$this->valid()) {
-            throw new RqlDriverError("No more data available.");
-        }
-        return $this->currentData[$this->currentIndex]->toNative($this->toNativeOptions);
-    }
+	public function changes() {
+		$requestor = $this->asyncRequestNewBatch();
 
-    public function toArray()
-    {
-        $result = array();
-        foreach ($this as $val) {
-            $result[] = $val;
-        }
-        return $result;
-    }
+		$requestor->current();
 
-    public function close()
-    {
-        if (!$this->isComplete) {
-            // Cancel the request
-            $this->connection->stopQuery($this->token);
-            $this->isComplete = true;
-        }
-        $this->currentIndex = 0;
-        $this->currentSize = 0;
-        $this->currentData = array();
-    }
+		while (!$this->isComplete || ($this->currentIndex < $this->currentSize)) {
+			$requestor->next();
+			yield false;
+		}
 
-    public function bufferedCount()
-    {
-        $this->currentSize - $this->currentIndex;
-    }
+		yield true;
+	}
 
-    public function getNotes()
-    {
-        return $this->notes;
-    }
+	// PHP iterator interface
+	public function rewind()
+	{
+		if ($this->wasIterated) {
+			throw new RqlDriverError("Rewind() not supported. You can only iterate over a cursor once.");
+		}
+	}
+	public function next()
+	{
+		$this->requestMoreIfNecessary();
+		if (!$this->valid()) {
+			throw new RqlDriverError("No more data available.");
+		}
+		$this->wasIterated = true;
+		$this->currentIndex++;
+	}
+	public function valid()
+	{
+		$this->requestMoreIfNecessary();
+		return !$this->isComplete || ($this->currentIndex < $this->currentSize);
+	}
+	public function key()
+	{
+		return null;
+	}
+	public function current()
+	{
+		$this->requestMoreIfNecessary();
+		if (!$this->valid()) {
+			throw new RqlDriverError("No more data available.");
+		}
+		return $this->currentData[$this->currentIndex]->toNative($this->toNativeOptions);
+	}
 
-    public function __toString()
-    {
-        return "Cursor";
-    }
+	public function toArray()
+	{
+		$result = array();
+		foreach ($this as $val) {
+			$result[] = $val;
+		}
+		return $result;
+	}
+
+	public function close()
+	{
+		if (!$this->isComplete) {
+			// Cancel the request
+			$this->connection->stopQuery($this->token);
+			$this->isComplete = true;
+		}
+		$this->currentIndex = 0;
+		$this->currentSize = 0;
+		$this->currentData = array();
+	}
+
+	public function bufferedCount()
+	{
+		$this->currentSize - $this->currentIndex;
+	}
+
+	public function getNotes()
+	{
+		return $this->notes;
+	}
+
+	public function __toString()
+	{
+		return "Cursor";
+	}
 
 
 
-    public function __destruct()
-    {
-        if ($this->connection->isOpen()) {
-            // Cancel the request
-            $this->close();
-        }
-    }
+	public function __destruct()
+	{
+		if ($this->connection->isOpen()) {
+			// Cancel the request
+			$this->close();
+		}
+	}
 
-    private function requestMoreIfNecessary()
-    {
-        while ($this->currentIndex == $this->currentSize) {
-            // We are at the end of currentData. Request more if available
-            if ($this->isComplete) {
-                return;
-            }
-            $this->requestNewBatch();
-        }
-    }
+	private function requestMoreIfNecessary()
+	{
+		while ($this->currentIndex == $this->currentSize) {
+			// We are at the end of currentData. Request more if available
+			if ($this->isComplete) {
+				return;
+			}
+			$this->requestNewBatch();
+		}
+	}
 
-    private function requestNewBatch()
-    {
-        try {
-            $response = $this->connection->continueQuery($this->token);
-            $this->setBatch($response);
-        } catch (\Exception $e) {
-            $this->isComplete = true;
-            $this->close();
-            throw $e;
-        }
-    }
+	private function asyncRequestNewBatch() {
+		try {
+			$responseQ = $this->connection->asyncContinueQuery($this->token);
 
-    private function setBatch($response)
-    {
-        $dc = new DatumConverter;
-        $this->isComplete = $response['t'] == ResponseResponseType::PB_SUCCESS_SEQUENCE;
-        $this->currentIndex = 0;
-        $this->currentSize = \count($response['r']);
-        $this->currentData = array();
-        foreach ($response['r'] as $row) {
-            $this->currentData[] = $datum = $dc->decodedJSONToDatum($row);
-        }
-    }
+			$response = $responseQ->current();
+
+			while($responseQ->valid()) {
+				if (!$response) yield;
+				$response = $responseQ->next();
+			}
+
+			$this->setBatch($response);
+		} catch (\Exception $e) {
+			$this->isComplete = true;
+			$this->close();
+			throw $e;
+		}
+	}
+
+	private function requestNewBatch()
+	{
+		try {
+			$response = $this->connection->continueQuery($this->token);
+			$this->setBatch($response);
+		} catch (\Exception $e) {
+			$this->isComplete = true;
+			$this->close();
+			throw $e;
+		}
+	}
+
+	private function setBatch($response)
+	{
+		$dc = new DatumConverter;
+		$this->isComplete = $response['t'] == ResponseResponseType::PB_SUCCESS_SEQUENCE;
+		$this->currentIndex = 0;
+		$this->currentSize = \count($response['r']);
+		$this->currentData = array();
+		foreach ($response['r'] as $row) {
+			$this->currentData[] = $datum = $dc->decodedJSONToDatum($row);
+		}
+	}
 }
