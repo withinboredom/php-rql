@@ -41,13 +41,16 @@ class Cursor implements Iterator
 
 		$requestor->current();
 
-		while (!$this->isComplete || ($this->currentIndex < $this->currentSize)) {
+		while (!$this->isComplete) {
 			$requestor->next();
-			$requestor->current();
-			yield false;
+			if ($this->currentIndex == $this->currentSize) {
+				$current = false;
+			}
+			else {
+				$current = $this->currentData[$this->currentIndex++]->toNative($this->toNativeOptions);
+			}
+			yield $current;
 		}
-
-		yield true;
 	}
 
 	// PHP iterator interface
@@ -148,9 +151,9 @@ class Cursor implements Iterator
 			$response = $responseQ->current();
 
 			while($responseQ->valid()) {
+				$response = $responseQ->current();
 				if (!$response) yield;
 				$responseQ->next();
-				$response = $responseQ->current();
 			}
 
 			$this->setBatch($response);

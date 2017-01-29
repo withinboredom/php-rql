@@ -23,6 +23,7 @@ class Connection extends DatumConverter
     private $activeTokens;
     private $timeout;
     private $ssl;
+    private $responses = [];
 
     public $defaultDbName;
 
@@ -292,16 +293,16 @@ class Connection extends DatumConverter
 	    $response = $responseQ->current();
 
 		while($responseQ->valid()) {
+			$response = $responseQ->current();
 			if (!$response) yield;
 			$responseQ->next();
-			$response = $responseQ->current();
 		}
 
 	    if ($response['t'] != ResponseResponseType::PB_SUCCESS_PARTIAL) {
 		    unset($this->activeTokens[$token]);
 	    }
 
-	    return $response;
+	    yield $response;
     }
 
     public function continueQuery($token)
@@ -363,14 +364,21 @@ class Connection extends DatumConverter
     }
 
     private function receiveAsyncResponse($token, $query = null, $noChecks = false) {
+	    if (isset($this->responses[$token])) {
+		    $response = $this->responses[$token]['response'];
+		    unset($this->responses[$token]);
+		    yield $response;
+		    return;
+	    }
+
 	    $header = $this->asyncReceiveStr(4 + 8);
 
 	    $responseHeader = $header->current();
 
 	    while($header->valid()) {
-		    if (!$responseHeader) yield;
-	    	$header->next();
 	    	$responseHeader = $header->current();
+		    if (!$responseHeader) yield;
+		    $header->next();
 	    }
 
 	    $responseHeader = unpack("Vtoken/Vtoken2/Vsize", $responseHeader);
@@ -385,8 +393,8 @@ class Connection extends DatumConverter
 
 	    while($responseQ->valid()) {
 	    	if (!$responseBuf) yield;
-	    	$responseQ->next();
 	    	$responseBuf = $responseQ->current();
+		    $responseQ->next();
 	    }
 
 	    $response = json_decode($responseBuf);
@@ -398,14 +406,30 @@ class Connection extends DatumConverter
 	    }
 	    $response = (array)$response;
 	    if (!$noChecks) {
-		    $this->checkResponse($response, $responseToken, $token, $query);
+		    if(!$this->checkResponse($response, $responseToken, $token, $query)) {
+		    	$this->responses[$token] = [ 'response' => $response, 'query' => $query ];
+		    	$responseQ = $this->receiveAsyncResponse($token, $query, $noChecks);
+
+		    	$response = $responseQ->current();
+
+		    	while($responseQ->valid()) {
+		    		$response = $responseQ->current();
+				    if (!$response) yield;
+		    		$responseQ->next();
+			    }
+		    }
 	    }
 
-	    return $response;
+	    yield $response;
     }
 
     private function receiveResponse($token, $query = null, $noChecks = false)
     {
+    	if (isset($this->responses[$token])) {
+    		$response = $this->responses[$token]['response'];
+    		unset($this->responses[$token]);
+    		return $response;
+	    }
         $responseHeader = $this->receiveStr(4 + 8);
         $responseHeader = unpack("Vtoken/Vtoken2/Vsize", $responseHeader);
         $responseToken = $responseHeader['token'];
@@ -424,7 +448,10 @@ class Connection extends DatumConverter
         }
         $response = (array)$response;
         if (!$noChecks) {
-            $this->checkResponse($response, $responseToken, $token, $query);
+            if(!$this->checkResponse($response, $responseToken, $token, $query)) {
+            	$this->responses[$token] = [ 'response' => $response, 'query' => $query ];
+            	return $this->receiveResponse($token, $query, $noChecks);
+            }
         }
 
         return $response;
@@ -441,10 +468,7 @@ class Connection extends DatumConverter
         }
 
         if ($responseToken != $token) {
-            throw new RqlDriverError(
-                'Received wrong token. Response does not match the request. '
-                . 'Expected ' . $token . ', received ' . $responseToken
-            );
+            return false;
         }
 
         if ($response['t'] == ResponseResponseType::PB_COMPILE_ERROR) {
@@ -460,6 +484,8 @@ class Connection extends DatumConverter
             }
             throw new RqlServerError("Runtime error: " . $response['r'][0], $query, $backtrace);
         }
+
+        return true;
     }
 
     private function createCursorFromResponse($response, $token, $notes, $toNativeOptions)
@@ -604,7 +630,7 @@ class Connection extends DatumConverter
 	    while (strlen($s) < $length) {
 		    $read = [ $this->socket ];
 		    $write = $except = null;
-		    $has_data = stream_select($read, $write, $except, 1) !== false;
+		    $has_data = stream_select($read, $write, $except, 0);
 		    if ($has_data) {
 			    $partialS = stream_get_contents( $this->socket, $length - strlen( $s ) );
 			    if ( $partialS === false || feof( $this->socket ) ) {
