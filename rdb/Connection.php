@@ -249,7 +249,7 @@ class Connection extends DatumConverter {
 		}
 
 		// Await the response
-		$this->receiveResponse( $token, $query )->when(
+		return $this->receiveResponse( $token, $query )->when(
 			function ( $response ) use ( $token, $toNativeOptions ) {
 				if ( $response['t'] == ResponseResponseType::PB_SUCCESS_PARTIAL ) {
 					$this->activeTokens[ $token ] = true;
