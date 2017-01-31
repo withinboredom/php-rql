@@ -181,7 +181,7 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = yield $this->receiveResponse( $token );
+		$response = yield from $this->receiveResponse( $token );
 
 		if ( $response['t'] != ResponseResponseType::PB_WAIT_COMPLETE ) {
 			throw new RqlDriverError( "Unexpected response type to noreplyWait query." );
@@ -201,7 +201,7 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = yield $this->receiveResponse( $token );
+		$response = yield from $this->receiveResponse( $token );
 
 		if ( $response['t'] != ResponseResponseType::PB_SERVER_INFO ) {
 			throw new RqlDriverError( "Unexpected response type to server info query." );
@@ -251,7 +251,7 @@ class Connection extends DatumConverter {
 		}
 
 		// Await the response
-		$response = yield $this->receiveResponse( $token, $query );
+		$response = yield from $this->receiveResponse( $token, $query );
 
 		if ( $response['t'] == ResponseResponseType::PB_SUCCESS_PARTIAL ) {
 			$this->activeTokens[ $token ] = true;
@@ -289,7 +289,7 @@ class Connection extends DatumConverter {
 		while ( $responseQ->valid() ) {
 			$response = $responseQ->current();
 			if ( ! $response ) {
-				yield;
+				yield from;
 			}
 			$responseQ->next();
 		}
@@ -298,7 +298,7 @@ class Connection extends DatumConverter {
 			unset( $this->activeTokens[ $token ] );
 		}
 
-		yield $response;
+		yield from $response;
 	}
 
 	public function continueQuery( $token ) {
@@ -314,7 +314,7 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = yield $this->receiveResponse( $token );
+		$response = yield from $this->receiveResponse( $token );
 
 		if ( $response['t'] != ResponseResponseType::PB_SUCCESS_PARTIAL ) {
 			unset( $this->activeTokens[ $token ] );
@@ -336,7 +336,7 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response (but don't check for errors. the stop response doesn't even have a type)
-		$response = yield $this->receiveResponse( $token, null, true );
+		$response = yield from $this->receiveResponse( $token, null, true );
 
 		unset( $this->activeTokens[ $token ] );
 
@@ -361,7 +361,7 @@ class Connection extends DatumConverter {
 		if ( isset( $this->responses[ $token ] ) ) {
 			$response = $this->responses[ $token ]['response'];
 			unset( $this->responses[ $token ] );
-			yield $response;
+			yield from $response;
 
 			return;
 		}
@@ -373,7 +373,7 @@ class Connection extends DatumConverter {
 		while ( $header->valid() ) {
 			$responseHeader = $header->current();
 			if ( ! $responseHeader ) {
-				yield;
+				yield from;
 			}
 			$header->next();
 		}
@@ -389,7 +389,7 @@ class Connection extends DatumConverter {
 		$responseBuf = $responseQ->current();
 
 		while($responseQ->valid()) {
-			if (!$responseBuf) yield;
+			if (!$responseBuf) yield from;
 			$responseBuf = $responseQ->current();
 			$responseQ->next();
 		}*/
@@ -413,14 +413,14 @@ class Connection extends DatumConverter {
 				while ( $responseQ->valid() ) {
 					$response = $responseQ->current();
 					if ( ! $response ) {
-						yield;
+						yield from;
 					}
 					$responseQ->next();
 				}
 			}
 		}
 
-		yield $response;
+		yield from $response;
 	}
 
 	private function receiveResponse( $token, $query = null, $noChecks = false ) {
@@ -691,10 +691,10 @@ class Connection extends DatumConverter {
 				}
 				$s = $s . $partialS;
 			} else {
-				yield;
+				yield from;
 			}
 		}
-		yield $s;
+		yield from $s;
 	}
 
 	private function receiveStr( $length ) {
