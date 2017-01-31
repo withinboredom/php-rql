@@ -24,6 +24,7 @@ class Connection extends DatumConverter {
 	private $timeout;
 	private $ssl;
 	private $responses = [];
+	private $lastToken = 0;
 
 	public $defaultDbName;
 
@@ -179,11 +180,15 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = yield $this->receiveResponse( $token );
+		return Amp\pipe( $this->receiveResponse( $token ),
+			function ( $response ) {
 
-		if ( $response['t'] != ResponseResponseType::PB_WAIT_COMPLETE ) {
-			throw new RqlDriverError( "Unexpected response type to noreplyWait query." );
-		}
+				if ( $response['t'] != ResponseResponseType::PB_WAIT_COMPLETE ) {
+					throw new RqlDriverError( "Unexpected response type to noreplyWait query." );
+				}
+
+				return $response;
+			} );
 	}
 
 	public function server() {
@@ -199,15 +204,17 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = yield $this->receiveResponse( $token );
+		return Amp\pipe( $this->receiveResponse( $token ),
+			function ( $response ) {
 
-		if ( $response['t'] != ResponseResponseType::PB_SERVER_INFO ) {
-			throw new RqlDriverError( "Unexpected response type to server info query." );
-		}
+				if ( $response['t'] != ResponseResponseType::PB_SERVER_INFO ) {
+					throw new RqlDriverError( "Unexpected response type to server info query." );
+				}
 
-		$toNativeOptions = array();
+				$toNativeOptions = array();
 
-		return $this->createDatumFromResponse( $response )->toNative( $toNativeOptions );
+				return $this->createDatumFromResponse( $response )->toNative( $toNativeOptions );
+			} );
 	}
 
 	public function run( Query $query, $options = array(), &$profile = '' ) {
@@ -249,7 +256,7 @@ class Connection extends DatumConverter {
 		}
 
 		// Await the response
-		return Amp\pipe($this->receiveResponse( $token, $query ),
+		return Amp\pipe( $this->receiveResponse( $token, $query ),
 			function ( $response ) use ( $token, $toNativeOptions ) {
 				if ( $response['t'] == ResponseResponseType::PB_SUCCESS_PARTIAL ) {
 					$this->activeTokens[ $token ] = true;
@@ -313,13 +320,15 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = yield $this->receiveResponse( $token );
+		return Amp\pipe( $this->receiveResponse( $token ),
+			function ( $response ) use ( $token ) {
 
-		if ( $response['t'] != ResponseResponseType::PB_SUCCESS_PARTIAL ) {
-			unset( $this->activeTokens[ $token ] );
-		}
+				if ( $response['t'] != ResponseResponseType::PB_SUCCESS_PARTIAL ) {
+					unset( $this->activeTokens[ $token ] );
+				}
 
-		return $response;
+				return $response;
+			} );
 	}
 
 	public function stopQuery( $token ) {
@@ -335,23 +344,18 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response (but don't check for errors. the stop response doesn't even have a type)
-		$response = yield $this->receiveResponse( $token, null, true );
+		return Amp\pipe( $this->receiveResponse( $token, null, true ),
+			function ( $response ) use ( $token ) {
 
-		unset( $this->activeTokens[ $token ] );
+				unset( $this->activeTokens[ $token ] );
 
-		return $response;
+				return $response;
+			} );
 	}
 
 	private function generateToken() {
-		$tries    = 0;
 		$maxToken = 1 << 30;
-		do {
-			$token         = \rand( 0, $maxToken );
-			$haveCollision = isset( $this->activeTokens[ $token ] );
-		} while ( $haveCollision && $tries ++ < 1024 );
-		if ( $haveCollision ) {
-			throw new RqlDriverError( "Unable to generate a unique token for the query." );
-		}
+		$token    = ++ $this->lastToken % $maxToken;
 
 		return $token;
 	}
@@ -579,7 +583,7 @@ class Connection extends DatumConverter {
 		$data = [ false, false, "" ];
 		Amp\onReadable( $this->socket, function ( $watcherId, $socket ) use ( $data ) {
 			$data[2] .= @fread( $socket, 1024 );
-			while(true) {
+			while ( true ) {
 				if ( $data[2] != "" ) {
 					if ( $data[0] === false ) {
 						$this->parseHeader( $data );
@@ -596,7 +600,7 @@ class Connection extends DatumConverter {
 						$this->responses[ $data[0]['token'] ] = $data[1];
 					}
 
-					if ($data[0] === false || $data[1] === false) {
+					if ( $data[0] === false || $data[1] === false ) {
 						break;
 					}
 
