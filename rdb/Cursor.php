@@ -37,7 +37,7 @@ class Cursor implements Iterator
 	}
 
 	public function changes() {
-		$requestor = $this->asyncRequestNewBatch();
+		$requestor = $this->RequestNewBatch();
 
 		$requestor->current();
 
