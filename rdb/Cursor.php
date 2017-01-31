@@ -140,34 +140,14 @@ class Cursor implements Iterator
 			if ($this->isComplete) {
 				return;
 			}
-			$this->requestNewBatch();
-		}
-	}
-
-	private function asyncRequestNewBatch() {
-		try {
-			$responseQ = $this->connection->asyncContinueQuery($this->token);
-
-			$response = $responseQ->current();
-
-			while($responseQ->valid()) {
-				$response = $responseQ->current();
-				if (!$response) yield;
-				$responseQ->next();
-			}
-
-			$this->setBatch($response);
-		} catch (\Exception $e) {
-			$this->isComplete = true;
-			$this->close();
-			throw $e;
+			foreach($this->requestNewBatch() as $k);
 		}
 	}
 
 	private function requestNewBatch()
 	{
 		try {
-			$response = $this->connection->continueQuery($this->token);
+			$response = yield $this->connection->continueQuery($this->token);
 			$this->setBatch($response);
 		} catch (\Exception $e) {
 			$this->isComplete = true;
