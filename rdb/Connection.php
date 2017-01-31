@@ -582,17 +582,20 @@ class Connection extends DatumConverter {
 			if ( $data[2] != "" ) {
 				if ( $data[0] === false ) {
 					$this->parseHeader( $data );
-				} else if ( $data[1] === false ) {
-					$this->parseBody( $data );
-				} else {
-					if ( array_key_exists( $data[0]['token'], $this->responses ) ) {
-						$this->responses[ $data[0]['token'] ]->succeed( $data[1] );
-						unset( $this->responses[ $data[0]['token'] ] );
-					} else {
-						$this->responses[ $data[0]['token'] ] = $data[1];
-					}
-					$data[0] = $data[1] = false;
 				}
+
+				if ( $data[1] === false ) {
+					$this->parseBody( $data );
+				}
+
+				if ( array_key_exists( $data[0]['token'], $this->responses ) ) {
+					$this->responses[ $data[0]['token'] ]->succeed( $data[1] );
+					unset( $this->responses[ $data[0]['token'] ] );
+				} else {
+					$this->responses[ $data[0]['token'] ] = $data[1];
+				}
+
+				$data[0] = $data[1] = false;
 			} else if ( ! $this->isOpen() ) {
 				Amp\cancel( $watcherId );
 			}
