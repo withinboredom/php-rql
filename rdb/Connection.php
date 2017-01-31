@@ -387,7 +387,7 @@ class Connection extends DatumConverter
 		    throw new RqlDriverError("Invalid response from server: Invalid token.");
 	    }
 	    $responseSize = $responseHeader['size'];
-	    $responseQ = $this->asyncReceiveStr($responseSize);
+	    /*$responseQ = $this->asyncReceiveStr($responseSize);
 
 	    $responseBuf = $responseQ->current();
 
@@ -395,7 +395,8 @@ class Connection extends DatumConverter
 	    	if (!$responseBuf) yield;
 	    	$responseBuf = $responseQ->current();
 		    $responseQ->next();
-	    }
+	    }*/
+	    $responseBuf = $this->receiveStr($responseSize);
 
 	    $response = json_decode($responseBuf);
 	    if (json_last_error() != JSON_ERROR_NONE) {
