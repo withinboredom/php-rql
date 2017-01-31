@@ -147,6 +147,7 @@ class Connection extends DatumConverter {
 	}
 
 	public function isOpen() {
+		return isset($this->socket);
 		return is_resource( $this->socket ) || ! @feof( $this->socket );
 	}
 
