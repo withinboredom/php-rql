@@ -147,7 +147,8 @@ class Connection extends DatumConverter {
 	}
 
 	public function isOpen() {
-		return isset($this->socket);
+		return isset( $this->socket );
+
 		return is_resource( $this->socket ) || ! @feof( $this->socket );
 	}
 
@@ -180,7 +181,7 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = $this->receiveResponse( $token );
+		$response = yield $this->receiveResponse( $token );
 
 		if ( $response['t'] != ResponseResponseType::PB_WAIT_COMPLETE ) {
 			throw new RqlDriverError( "Unexpected response type to noreplyWait query." );
@@ -200,7 +201,7 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = $this->receiveResponse( $token );
+		$response = yield $this->receiveResponse( $token );
 
 		if ( $response['t'] != ResponseResponseType::PB_SERVER_INFO ) {
 			throw new RqlDriverError( "Unexpected response type to server info query." );
@@ -250,7 +251,7 @@ class Connection extends DatumConverter {
 		}
 
 		// Await the response
-		$response = $this->receiveResponse( $token, $query );
+		$response = yield $this->receiveResponse( $token, $query );
 
 		if ( $response['t'] == ResponseResponseType::PB_SUCCESS_PARTIAL ) {
 			$this->activeTokens[ $token ] = true;
@@ -313,7 +314,7 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response
-		$response = $this->receiveResponse( $token );
+		$response = yield $this->receiveResponse( $token );
 
 		if ( $response['t'] != ResponseResponseType::PB_SUCCESS_PARTIAL ) {
 			unset( $this->activeTokens[ $token ] );
@@ -335,7 +336,7 @@ class Connection extends DatumConverter {
 		$this->sendQuery( $token, $jsonQuery );
 
 		// Await the response (but don't check for errors. the stop response doesn't even have a type)
-		$response = $this->receiveResponse( $token, null, true );
+		$response = yield $this->receiveResponse( $token, null, true );
 
 		unset( $this->activeTokens[ $token ] );
 
@@ -427,8 +428,17 @@ class Connection extends DatumConverter {
 			$response = $this->responses[ $token ]['response'];
 			unset( $this->responses[ $token ] );
 
-			return $response;
+			$deferred = new Amp\Deferred();
+			$deferred->succeed( $response );
+
+			return $deferred->promise();
 		}
+
+		$deferred = new Amp\Deferred();
+
+		$this->responses[ $token ] = $deferred;
+
+		return $deferred->promise();
 	}
 
 	private function checkResponse( $response, $query = null ) {
@@ -576,8 +586,13 @@ class Connection extends DatumConverter {
 				} else if ( $data[1] === false ) {
 					$this->parseBody( $data );
 				} else {
-					$this->responses[ $data[0]['token'] ] = $data[1];
-					$data[0]                              = $data[1] = false;
+					if ( array_key_exists( $data[0]['token'], $this->responses ) ) {
+						$this->responses[ $data[0]['token'] ]->succeed( $data[1] );
+						unset( $this->responses[ $data[0]['token'] ] );
+					} else {
+						$this->responses[ $data[0]['token'] ] = $data[1];
+					}
+					$data[0] = $data[1] = false;
 				}
 			} else if ( ! $this->isOpen() ) {
 				Amp\cancel( $watcherId );
