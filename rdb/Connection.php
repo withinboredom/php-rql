@@ -627,12 +627,12 @@ class Connection extends DatumConverter {
 
 		$size = $data[0]['size'];
 
-		if ( strlen( $data ) < $size ) {
+		if ( strlen( $data[2] ) < $size ) {
 			return $data;
 		}
 
-		$bodyStr = substr( $data, 0, $size );
-		$tail    = substr( $data, $size );
+		$bodyStr = substr( $data[2], 0, $size );
+		$tail    = substr( $data[2], $size );
 
 		$response = json_decode( $bodyStr );
 		if ( json_last_error() != JSON_ERROR_NONE ) {
