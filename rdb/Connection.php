@@ -612,7 +612,10 @@ class Connection extends DatumConverter {
 					}
 
 					$data[0] = $data[1] = false;
-					break;
+
+					if ( strlen( $data[2] ) === 0 || strlen( $data[2] ) < 4 + 8 ) {
+						break;
+					}
 				} else if ( ! $this->isOpen() ) {
 					Amp\cancel( $watcherId );
 					break;
