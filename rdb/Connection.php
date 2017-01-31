@@ -603,7 +603,7 @@ class Connection extends DatumConverter {
 	}
 
 	private function parseHeader( &$data ) {
-		if ( count( $data[2] ) < 4 + 8 ) {
+		if ( strlen( $data[2] ) < 4 + 8 ) {
 			return $data;
 		}
 		$headerStr = substr( $data[2], 0, 4 + 8 );
@@ -627,7 +627,7 @@ class Connection extends DatumConverter {
 
 		$size = $data[0]['size'];
 
-		if ( count( $data ) < $size ) {
+		if ( strlen( $data ) < $size ) {
 			return $data;
 		}
 
