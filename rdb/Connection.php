@@ -427,16 +427,6 @@ class Connection extends DatumConverter {
 	}
 
 	private function receiveResponse( $token, $query = null, $noChecks = false ) {
-		if ( isset( $this->responses[ $token ] ) ) {
-			$response = $this->responses[ $token ]['response'];
-			unset( $this->responses[ $token ] );
-
-			$deferred = new Amp\Deferred();
-			$deferred->succeed( $response );
-
-			return $deferred->promise();
-		}
-
 		$deferred = new Amp\Deferred();
 
 		if ( isset( $this->responses[ $token ] ) ) {
