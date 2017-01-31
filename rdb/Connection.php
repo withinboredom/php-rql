@@ -249,22 +249,23 @@ class Connection extends DatumConverter {
 		}
 
 		// Await the response
-		$response = yield $this->receiveResponse( $token, $query );
+		$this->receiveResponse( $token, $query )->when(
+			function ( $response ) use ( $token, $toNativeOptions ) {
+				if ( $response['t'] == ResponseResponseType::PB_SUCCESS_PARTIAL ) {
+					$this->activeTokens[ $token ] = true;
+				}
 
-		if ( $response['t'] == ResponseResponseType::PB_SUCCESS_PARTIAL ) {
-			$this->activeTokens[ $token ] = true;
-		}
+				if ( isset( $response['p'] ) ) {
+					$profile = $this->decodedJSONToDatum( $response['p'] )->toNative( $toNativeOptions );
+				}
 
-		if ( isset( $response['p'] ) ) {
-			$profile = $this->decodedJSONToDatum( $response['p'] )->toNative( $toNativeOptions );
-		}
-
-		if ( $response['t'] == ResponseResponseType::PB_SUCCESS_ATOM ) {
-			return $this->createDatumFromResponse( $response )->toNative( $toNativeOptions );
-		} else {
-			return $this->createCursorFromResponse( $response, $token, $response['n'], $toNativeOptions );
-		}
-
+				if ( $response['t'] == ResponseResponseType::PB_SUCCESS_ATOM ) {
+					return $this->createDatumFromResponse( $response )->toNative( $toNativeOptions );
+				} else {
+					return $this->createCursorFromResponse( $response, $token, $response['n'], $toNativeOptions );
+				}
+			}
+		);
 	}
 
 	public function asyncContinueQuery( $token ) {
