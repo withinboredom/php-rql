@@ -579,25 +579,33 @@ class Connection extends DatumConverter {
 		$data = [ false, false, "" ];
 		Amp\onReadable( $this->socket, function ( $watcherId, $socket ) use ( $data ) {
 			$data[2] .= @fread( $socket, 1024 );
-			if ( $data[2] != "" ) {
-				if ( $data[0] === false ) {
-					$this->parseHeader( $data );
-				}
+			while(true) {
+				if ( $data[2] != "" ) {
+					if ( $data[0] === false ) {
+						$this->parseHeader( $data );
+					}
 
-				if ( $data[1] === false ) {
-					$this->parseBody( $data );
-				}
+					if ( $data[1] === false ) {
+						$this->parseBody( $data );
+					}
 
-				if ( array_key_exists( $data[0]['token'], $this->responses ) ) {
-					$this->responses[ $data[0]['token'] ]->succeed( $data[1] );
-					unset( $this->responses[ $data[0]['token'] ] );
-				} else {
-					$this->responses[ $data[0]['token'] ] = $data[1];
-				}
+					if ( array_key_exists( $data[0]['token'], $this->responses ) ) {
+						$this->responses[ $data[0]['token'] ]->succeed( $data[1] );
+						unset( $this->responses[ $data[0]['token'] ] );
+					} else {
+						$this->responses[ $data[0]['token'] ] = $data[1];
+					}
 
-				$data[0] = $data[1] = false;
-			} else if ( ! $this->isOpen() ) {
-				Amp\cancel( $watcherId );
+					if ($data[0] === false || $data[1] === false) {
+						break;
+					}
+
+					$data[0] = $data[1] = false;
+					break;
+				} else if ( ! $this->isOpen() ) {
+					Amp\cancel( $watcherId );
+					break;
+				}
 			}
 		} );
 	}
