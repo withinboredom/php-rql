@@ -439,7 +439,11 @@ class Connection extends DatumConverter {
 
 		$deferred = new Amp\Deferred();
 
-		$this->responses[ $token ] = $deferred;
+		if ( isset( $this->responses[ $token ] ) ) {
+			$this->responses[ $token ][] = $deferred;
+		} else {
+			$this->responses[ $token ] = [ $deferred ];
+		}
 
 		return $deferred->promise();
 	}
@@ -594,10 +598,13 @@ class Connection extends DatumConverter {
 					}
 
 					if ( array_key_exists( $data[0]['token'], $this->responses ) ) {
-						$this->responses[ $data[0]['token'] ]->succeed( $data[1] );
-						unset( $this->responses[ $data[0]['token'] ] );
+						$promise = array_shift( $this->responses[ $data[0]['token'] ] );
+						$promise->succeed( $data[1] );
+						if ( empty( $this->responses[ $data[0]['token'] ] ) ) {
+							unset( $this->responses[ $data[0]['token'] ] );
+						}
 					} else {
-						$this->responses[ $data[0]['token'] ] = $data[1];
+						throw new \Exception( "Time has been reversed" );
 					}
 
 					if ( $data[0] === false || $data[1] === false ) {
