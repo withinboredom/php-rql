@@ -576,7 +576,7 @@ class Connection extends DatumConverter {
 
 		$data = [ false, false, "" ];
 		Amp\onReadable( $this->socket, function ( $watcherId, $socket ) use ( &$data ) {
-			$data[2] .= @fread( $socket, 1024 );
+			$data[2] .= @fread( $socket, 8192 );
 			while ( true ) {
 				if ( $data[2] != "" ) {
 					if ( $data[0] === false ) {
