@@ -575,7 +575,7 @@ class Connection extends DatumConverter {
 		}
 
 		$data = [ false, false, "" ];
-		Amp\onReadable( $this->socket, function ( $watcherId, $socket ) use ( $data ) {
+		Amp\onReadable( $this->socket, function ( $watcherId, $socket ) use ( &$data ) {
 			$data[2] .= @fread( $socket, 1024 );
 			while ( true ) {
 				if ( $data[2] != "" ) {
@@ -585,6 +585,10 @@ class Connection extends DatumConverter {
 
 					if ( $data[1] === false ) {
 						$this->parseBody( $data );
+					}
+
+					if ( $data[0] === false || $data[1] === false ) {
+						break;
 					}
 
 					if ( array_key_exists( $data[0]['token'], $this->responses ) ) {
@@ -597,15 +601,12 @@ class Connection extends DatumConverter {
 						throw new \Exception( "Time has been reversed" );
 					}
 
-					if ( $data[0] === false || $data[1] === false ) {
-						break;
-					}
-
 					$data[0] = $data[1] = false;
 
 					if ( strlen( $data[2] ) === 0 || strlen( $data[2] ) < 4 + 8 ) {
 						break;
 					}
+
 				} else if ( ! $this->isOpen() ) {
 					Amp\cancel( $watcherId );
 					break;
